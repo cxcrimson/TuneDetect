@@ -121,19 +121,27 @@ export function detectKey(bassChroma: number[], midChroma: number[], highChroma:
   const topIdx = NOTE_NAMES.indexOf(top.key);
   
   // --- SUBDOMINANT VS TONIC RESOLUTION (The IV-V-I Fix) ---
-  // If the top candidate is 'G' Major, check if 'C' (Subdominant) is actually the Tonic.
-  // We check for the "Leading Tone Paradox": If the 7th is weak but the Flat 7th is strong,
-  // the candidate is likely the V chord of the real key.
+  // Resolve the "Dominant Trap": If the top candidate is the V, but contains 
+  // notes from the real I (like the IV chord), we pivot to the I.
   if (top.mode === 'major') {
-    const seventhIdx = (topIdx + 11) % 12; // Leading Tone (e.g., F# in G)
-    const flatSeventhIdx = (topIdx + 10) % 12; // Flat 7th (e.g., F in G)
-    const fourthIdx = (topIdx + 5) % 12; // Subdominant (e.g., C in G)
+    const fifthIdx = (topIdx + 7) % 12;      // If top is C, fifth is G
+    const fourthIdx = (topIdx + 5) % 12;     // If top is C, fourth is F
+    const seventhIdx = (topIdx + 11) % 12;   // If top is C, 7th is B
+    const flatSevenIdx = (topIdx + 10) % 12; // If top is C, b7 is Bb
 
-    if (nMid[flatSeventhIdx] > nMid[seventhIdx] * 1.5 && nMid[fourthIdx] > nMid[topIdx] * 0.8) {
-       const tonicCandidate = candidates.find(c => c.key === NOTE_NAMES[fourthIdx] && c.mode === 'major');
-       if (tonicCandidate && tonicCandidate.confidence > top.confidence * 0.85) {
-          return { key: tonicCandidate.key, mode: 'major', confidence: tonicCandidate.confidence };
-       }
+    // CASE 1: Top is the V (e.g., G), but the real key is the I (e.g., C)
+    // In G Major, the 7th is F#. In C Major, F is natural.
+    // If we hear strong F natural and weak F#, and strong G energy, we are probably in C.
+    const potentialTonicIdx = (topIdx + 5) % 12; // C is the 4th of G
+    const tonicLeadingToneIdx = (potentialTonicIdx + 11) % 12; // B
+    
+    // Check if the current "Top" is behaving like a V chord
+    // (Strong energy at its own root, but its Major 7th is replaced by the real key's 4th)
+    if (nMid[flatSevenIdx] > nMid[seventhIdx] * 1.8) {
+      const tonicCandidate = candidates.find(c => c.key === NOTE_NAMES[potentialTonicIdx] && c.mode === 'major');
+      if (tonicCandidate && tonicCandidate.confidence > top.confidence * 0.75) {
+        return { key: tonicCandidate.key, mode: 'major', confidence: tonicCandidate.confidence };
+      }
     }
   }
 

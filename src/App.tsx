@@ -218,7 +218,7 @@ export default function App() {
           <span>Buffer: 2048</span>
         </div>
         <div className="flex gap-4">
-          <span className="text-white/20 uppercase font-bold tracking-tight">Spectral Stabilization v8.0 (Scale Paradox Fix)</span>
+          <span className="text-white/20 uppercase font-bold tracking-tight">Spectral Stabilization v9.0 (Scale Complement Logic)</span>
         </div>
       </footer>
     </div>
