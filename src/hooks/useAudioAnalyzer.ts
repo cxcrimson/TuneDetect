@@ -11,6 +11,7 @@ export function useAudioAnalyzer(isActive: boolean) {
     isStabilized: boolean;
     progress: number; // 0 to 1
   } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -23,11 +24,15 @@ export function useAudioAnalyzer(isActive: boolean) {
     globalChromaRef.current = new Array(12).fill(0);
     frameCountRef.current = 0;
     setAnalysis(null);
+    setError(null);
   };
 
   useEffect(() => {
     if (!isActive) {
       if (analyzerRef.current) analyzerRef.current.stop();
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(console.error);
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -36,13 +41,18 @@ export function useAudioAnalyzer(isActive: boolean) {
 
     const startAnalysis = async () => {
       try {
+        setError(null);
         let stream: MediaStream;
 
-        if (typeof chrome !== 'undefined' && chrome.tabCapture) {
+        if (typeof chrome !== 'undefined' && chrome.tabCapture && chrome.tabCapture.capture) {
           stream = await new Promise((resolve, reject) => {
             chrome.tabCapture.capture({ audio: true, video: false }, (s) => {
-              if (s) resolve(s);
-              else reject(new Error('Tab capture failed or denied'));
+              if (s) {
+                resolve(s);
+              } else {
+                const msg = chrome.runtime.lastError?.message || "Capture failed. Make sure you are on a tab with audio playing.";
+                reject(new Error(msg));
+              }
             });
           });
         } else {
@@ -50,20 +60,22 @@ export function useAudioAnalyzer(isActive: boolean) {
         }
 
         streamRef.current = stream;
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const audioContext = new AudioContextClass();
         audioContextRef.current = audioContext;
+
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
 
         const source = audioContext.createMediaStreamSource(stream);
 
+        // Required for tabCapture so user can still hear the audio
         if (typeof chrome !== 'undefined' && chrome.tabCapture) {
           source.connect(audioContext.destination);
         }
 
         let liveChroma = new Array(12).fill(0);
-        
-        // Target: ~45 seconds of audio for full stabilization
-        // With 2048 buffer @ 48kHz, that's roughly 23 frames per second.
-        // 45 seconds * 23 fps = ~1000 frames.
         const STABILIZATION_FRAMES = 1000;
 
         const analyzer = Meyda.createMeydaAnalyzer({
@@ -72,7 +84,13 @@ export function useAudioAnalyzer(isActive: boolean) {
           bufferSize: 2048,
           featureExtractors: ['chroma'],
           callback: (features: any) => {
-            if (features.chroma) {
+            if (features && features.chroma) {
+              // Vitality check: Ensure we are actually getting data (not just zeros)
+              const hasSignal = features.chroma.some((c: number) => c > 0.0001);
+              if (!hasSignal && frameCountRef.current > 50 && frameCountRef.current % 100 === 0) {
+                 console.warn("Sensor active but receiving silence.");
+              }
+
               frameCountRef.current++;
               
               const isFirstMinute = frameCountRef.current < STABILIZATION_FRAMES;
@@ -82,10 +100,8 @@ export function useAudioAnalyzer(isActive: boolean) {
                 liveChroma[i] = liveChroma[i] * 0.7 + val * 0.3;
                 
                 if (isFirstMinute) {
-                  // Pure accumulation for building the initial histogram
                   globalChromaRef.current[i] += val;
                 } else {
-                  // Transition to leaky integrator for long-term drift tracking
                   globalChromaRef.current[i] = globalChromaRef.current[i] * 0.999 + val * 0.001;
                 }
               });
@@ -106,7 +122,9 @@ export function useAudioAnalyzer(isActive: boolean) {
         analyzer.start();
         analyzerRef.current = analyzer;
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         console.error('Failed to start audio analysis', err);
+        setError(message);
       }
     };
 
@@ -114,12 +132,12 @@ export function useAudioAnalyzer(isActive: boolean) {
 
     return () => {
       if (analyzerRef.current) analyzerRef.current.stop();
-      if (audioContextRef.current) audioContextRef.current.close();
+      if (audioContextRef.current) audioContextRef.current.close().catch(console.error);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, [isActive]);
 
-  return { analysis, reset };
+  return { analysis, reset, error };
 }

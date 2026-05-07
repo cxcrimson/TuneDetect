@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Music, Settings, Activity, Search } from 'lucide-react';
+import { Mic, MicOff, Music, Settings, Activity, Search, X, Info } from 'lucide-react';
 import { useAudioAnalyzer } from './hooks/useAudioAnalyzer';
 import { Visualizer } from './components/Visualizer';
 import { YoutubePlayer } from './components/YoutubePlayer';
@@ -8,7 +8,7 @@ import { NOTE_NAMES } from './lib/theory';
 
 export default function App() {
   const [isListening, setIsListening] = useState(false);
-  const { analysis, reset } = useAudioAnalyzer(isListening);
+  const { analysis, reset, error } = useAudioAnalyzer(isListening);
 
   const handleVideoSelect = () => {
     reset(); // Clear old spectral data when song changes
@@ -22,6 +22,28 @@ export default function App() {
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#4f46e5] opacity-10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#ec4899] opacity-10 rounded-full blur-[120px]" />
       </div>
+
+      {/* Status Notifications */}
+      <AnimatePresence>
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            className="absolute top-16 left-1/2 z-50 w-[90%] max-w-sm"
+          >
+            <div className="bg-red-500/10 border border-red-500/30 backdrop-blur-xl p-3 rounded-lg flex items-center justify-between shadow-2xl">
+              <div className="flex items-center gap-3">
+                <Activity className="w-4 h-4 text-red-500" />
+                <p className="text-[10px] text-gray-300 font-medium">{error}</p>
+              </div>
+              <button onClick={reset} className="text-gray-500 hover:text-white p-1">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Top Header */}
       <header className="flex items-center justify-between px-8 py-4 z-10 border-b border-white/5 bg-black/20 backdrop-blur-md">
@@ -121,9 +143,19 @@ export default function App() {
         <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
           {/* YT Input Section */}
           <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 backdrop-blur-sm">
-            <h3 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <Search className="w-2.5 h-2.5 text-indigo-400" />
-              Source Input
+            <h3 className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Search className="w-2.5 h-2.5 text-indigo-400" />
+                Source Input
+              </div>
+              <div className="flex items-center gap-1 group relative cursor-help">
+                <Info className="w-2.5 h-2.5 text-neutral-600" />
+                <div className="absolute bottom-full right-0 mb-2 w-52 p-2 bg-neutral-900 border border-white/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                  <p className="text-[8px] text-gray-400 leading-normal normal-case font-normal">
+                    <strong className="text-white">Pro Tip:</strong> To scan a whole song quickly, play the video and <span className="text-indigo-400">scrub through the timeline</span>. The engine accumulates data from all sections you hear.
+                  </p>
+                </div>
+              </div>
             </h3>
             <YoutubePlayer onVideoSelect={handleVideoSelect} />
           </div>
