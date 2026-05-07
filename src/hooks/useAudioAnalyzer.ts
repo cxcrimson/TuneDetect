@@ -91,7 +91,7 @@ export function useAudioAnalyzer(isActive: boolean) {
           audioContext: audioContext,
           source: source,
           bufferSize: 2048,
-          featureExtractors: ['chroma', 'spectralCentroid', 'buffer'],
+          featureExtractors: ['chroma', 'spectralCentroid', 'spectralFlatness', 'buffer'],
           callback: (features: any) => {
             if (features && features.chroma) {
               frameCountRef.current++;
@@ -99,24 +99,29 @@ export function useAudioAnalyzer(isActive: boolean) {
               const isFirstMinute = frameCountRef.current < STABILIZATION_FRAMES;
               const progress = Math.min(frameCountRef.current / STABILIZATION_FRAMES, 1);
 
-              // 1. Segregate Bands
-              // Instead of just using the global chroma, we create 3 weighted chromas.
-              // We'll use the centroid to determine spectral balance.
+              // 1. Tonal Gate (Harmonic Percussive Separation approximation)
+              // Low flatness means tonal (musical) signal. High flatness means noise or drums.
+              const flatness = features.spectralFlatness || 0;
+              const tonalGate = Math.max(0.05, 1 - flatness * 1.5);
+
+              // 2. Segregate Bands
               const centroid = features.spectralCentroid || 0;
-              const weightBass = Math.max(0, 1 - centroid / 2000);
-              const weightTreble = Math.max(0, (centroid - 2000) / 4000);
+              const weightBass = Math.max(0, 1 - centroid / 2500);
+              const weightTreble = Math.max(0, (centroid - 1500) / 4500);
 
               features.chroma.forEach((val: number, i: number) => {
+                const gatedVal = val * tonalGate;
+
                 // Low Band (Bass Focus)
-                const bassVal = val * (1.2 - (i % 12) * 0.02) * weightBass;
+                const bassVal = gatedVal * (1.3 - (i % 12) * 0.03) * weightBass;
                 liveBassChroma[i] = liveBassChroma[i] * 0.8 + bassVal * 0.2;
                 
                 // Mid Band (Harmonic Focus)
-                const midVal = val * (1 - Math.abs(6 - (i % 12)) * 0.05);
+                const midVal = gatedVal * (1 - Math.abs(6 - (i % 12)) * 0.05);
                 liveMidChroma[i] = liveMidChroma[i] * 0.8 + midVal * 0.2;
 
                 // High Band (Spectral noise filtering)
-                const highVal = val * weightTreble;
+                const highVal = gatedVal * weightTreble;
                 liveHighChroma[i] = liveHighChroma[i] * 0.8 + highVal * 0.2;
 
                 if (isFirstMinute) {
@@ -124,9 +129,9 @@ export function useAudioAnalyzer(isActive: boolean) {
                   midAcc[i] += midVal;
                   highAcc[i] += highVal;
                 } else {
-                  bassAcc[i] = bassAcc[i] * 0.999 + bassVal * 0.001;
-                  midAcc[i] = midAcc[i] * 0.999 + midVal * 0.001;
-                  highAcc[i] = highAcc[i] * 0.999 + highVal * 0.001;
+                  bassAcc[i] = bassAcc[i] * 0.9992 + bassVal * 0.0008;
+                  midAcc[i] = midAcc[i] * 0.9992 + midVal * 0.0008;
+                  highAcc[i] = highAcc[i] * 0.9992 + highVal * 0.0008;
                 }
               });
 

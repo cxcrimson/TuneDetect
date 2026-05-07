@@ -92,9 +92,14 @@ export function detectKey(bassChroma: number[], midChroma: number[], highChroma:
     const sus4 = nMid[(i + 5) % 12];
     const sus2 = nMid[(i + 2) % 12];
 
+    // Sharpness: How much does the Root stand out in its own band?
+    // High sharpness = high confidence that this is a real root note.
+    const sortedBass = [...nBass].sort((a,b) => b-a);
+    const bassSharpness = rootEnergy / (sortedBass[1] + 0.01);
+
     // Calculate structural confidence based on triad/sus patterns
-    const majorStructural = (rootEnergy * 1.5 + fifth + Math.max(major3rd, sus4, sus2) * 1.2) / 3;
-    const minorStructural = (rootEnergy * 1.5 + fifth + minor3rd * 1.4) / 3;
+    const majorStructural = (rootEnergy * 1.5 + fifth + Math.max(major3rd, sus4, sus2) * 1.2) * (bassSharpness > 1.5 ? 1.1 : 1.0);
+    const minorStructural = (rootEnergy * 1.5 + fifth + minor3rd * 1.4) * (bassSharpness > 1.5 ? 1.1 : 1.0);
 
     candidates.push({ 
       key: NOTE_NAMES[i], 
