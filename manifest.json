@@ -4,12 +4,7 @@
   "version": "1.0.0",
   "description": "Real-time key and mode detector for YouTube music.",
   "action": {
-    "default_popup": "index.html",
-    "default_icon": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
-    }
+    "default_popup": "index.html"
   },
   "permissions": [
     "tabCapture",
