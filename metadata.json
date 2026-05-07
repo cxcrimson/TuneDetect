@@ -1,0 +1,6 @@
+{
+  "name": "TuneDetect",
+  "description": "Real-time musical key and mode detector for music discovery and analysis.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["audio_analysis", "youtube_integration"]
+}
