@@ -32,13 +32,32 @@ export function useAudioAnalyzer(isActive: boolean) {
 
     const startAnalysis = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
+        let stream: MediaStream;
 
+        // Check if running as a Chrome/Edge extension and has tabCapture permission
+        if (typeof chrome !== 'undefined' && chrome.tabCapture) {
+          stream = await new Promise((resolve, reject) => {
+            chrome.tabCapture.capture({ audio: true, video: false }, (s) => {
+              if (s) resolve(s);
+              else reject(new Error('Tab capture failed or denied'));
+            });
+          });
+        } else {
+          // Fallback to microphone for web preview
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+
+        streamRef.current = stream;
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = audioContext;
 
         const source = audioContext.createMediaStreamSource(stream);
+
+        // CRITICAL for extensions: Pipe the captured audio back to the speakers
+        // Otherwise, the tab will go silent when captured.
+        if (typeof chrome !== 'undefined' && chrome.tabCapture) {
+          source.connect(audioContext.destination);
+        }
 
         // Live chroma for the visualizer (faster response)
         let liveChroma = new Array(12).fill(0);

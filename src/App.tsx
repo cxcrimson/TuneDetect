@@ -133,13 +133,13 @@ export default function App() {
                   RESET ENGINE
                 </button>
               </div>
-              <h4 className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Source Note</h4>
+              <h4 className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Audio Source</h4>
               <p className="text-[10px] text-gray-500 leading-relaxed">
-                In this preview environment, we use your <span className="text-gray-300">Microphone</span> as a sensor to pick up audio from your speakers. 
+                The engine is now configured for <span className="text-gray-300">Internal Tab Capture</span>. 
               </p>
               <div className="mt-2 p-3 bg-indigo-500/5 rounded-lg border border-indigo-500/10">
                 <p className="text-[9px] text-indigo-300/80 leading-snug italic">
-                  Note: A real Chrome extension would capture internal audio directly; here, the mic acts as our high-fidelity bridge.
+                  Run as a Chrome Extension to intercept digital audio directly from YouTube with zero interference.
                 </p>
               </div>
             </div>
