@@ -9,9 +9,15 @@
 }
 
 @layer base {
+  html {
+    width: 780px;
+    height: 600px;
+  }
   body {
     @apply antialiased text-[#e0e0e0] bg-[#050507];
-    overflow-x: hidden;
+    overflow: hidden;
+    width: 780px;
+    height: 600px;
   }
 }
 
