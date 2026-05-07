@@ -7,7 +7,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "index.html"
+    "default_title": "Open TuneDetect Pro"
   },
   "permissions": [
     "tabCapture",

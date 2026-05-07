@@ -5,6 +5,11 @@ chrome.sidePanel
   })
   .catch((error) => console.error(error));
 
+// Open side panel when extension icon is clicked
+chrome.action.onClicked.addListener((tab) => {
+  chrome.sidePanel.open({ tabId: tab.id });
+});
+
 // Keep track of active capture tabs to avoid multiple captures
 let activeCaptures = new Set();
 

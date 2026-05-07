@@ -30,8 +30,9 @@ export function useAudioAnalyzer(isActive: boolean) {
   useEffect(() => {
     if (!isActive) {
       if (analyzerRef.current) analyzerRef.current.stop();
-      if (audioContextRef.current) {
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close().catch(console.error);
+        audioContextRef.current = null;
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -75,42 +76,65 @@ export function useAudioAnalyzer(isActive: boolean) {
           source.connect(audioContext.destination);
         }
 
-        let liveChroma = new Array(12).fill(0);
+        let liveBassChroma = new Array(12).fill(0);
+        let liveMidChroma = new Array(12).fill(0);
+        let liveHighChroma = new Array(12).fill(0);
+
         const STABILIZATION_FRAMES = 1000;
+        
+        // Accumulators for long-term stabilization
+        const bassAcc = new Array(12).fill(0);
+        const midAcc = new Array(12).fill(0);
+        const highAcc = new Array(12).fill(0);
 
         const analyzer = Meyda.createMeydaAnalyzer({
           audioContext: audioContext,
           source: source,
           bufferSize: 2048,
-          featureExtractors: ['chroma'],
+          featureExtractors: ['chroma', 'spectralCentroid', 'buffer'],
           callback: (features: any) => {
             if (features && features.chroma) {
-              // Vitality check: Ensure we are actually getting data (not just zeros)
-              const hasSignal = features.chroma.some((c: number) => c > 0.0001);
-              if (!hasSignal && frameCountRef.current > 50 && frameCountRef.current % 100 === 0) {
-                 console.warn("Sensor active but receiving silence.");
-              }
-
               frameCountRef.current++;
               
               const isFirstMinute = frameCountRef.current < STABILIZATION_FRAMES;
               const progress = Math.min(frameCountRef.current / STABILIZATION_FRAMES, 1);
 
+              // 1. Segregate Bands
+              // Instead of just using the global chroma, we create 3 weighted chromas.
+              // We'll use the centroid to determine spectral balance.
+              const centroid = features.spectralCentroid || 0;
+              const weightBass = Math.max(0, 1 - centroid / 2000);
+              const weightTreble = Math.max(0, (centroid - 2000) / 4000);
+
               features.chroma.forEach((val: number, i: number) => {
-                liveChroma[i] = liveChroma[i] * 0.7 + val * 0.3;
+                // Low Band (Bass Focus)
+                const bassVal = val * (1.2 - (i % 12) * 0.02) * weightBass;
+                liveBassChroma[i] = liveBassChroma[i] * 0.8 + bassVal * 0.2;
                 
+                // Mid Band (Harmonic Focus)
+                const midVal = val * (1 - Math.abs(6 - (i % 12)) * 0.05);
+                liveMidChroma[i] = liveMidChroma[i] * 0.8 + midVal * 0.2;
+
+                // High Band (Spectral noise filtering)
+                const highVal = val * weightTreble;
+                liveHighChroma[i] = liveHighChroma[i] * 0.8 + highVal * 0.2;
+
                 if (isFirstMinute) {
-                  globalChromaRef.current[i] += val;
+                  bassAcc[i] += bassVal;
+                  midAcc[i] += midVal;
+                  highAcc[i] += highVal;
                 } else {
-                  globalChromaRef.current[i] = globalChromaRef.current[i] * 0.999 + val * 0.001;
+                  bassAcc[i] = bassAcc[i] * 0.999 + bassVal * 0.001;
+                  midAcc[i] = midAcc[i] * 0.999 + midVal * 0.001;
+                  highAcc[i] = highAcc[i] * 0.999 + highVal * 0.001;
                 }
               });
 
               if (frameCountRef.current % 15 === 0) {
-                const result = detectKey(globalChromaRef.current);
+                const result = detectKey(bassAcc, midAcc, highAcc);
                 setAnalysis({
                   ...result,
-                  chroma: [...liveChroma],
+                  chroma: [...liveMidChroma], // We use midChroma for UI visualization
                   isStabilized: !isFirstMinute,
                   progress
                 });
@@ -132,7 +156,10 @@ export function useAudioAnalyzer(isActive: boolean) {
 
     return () => {
       if (analyzerRef.current) analyzerRef.current.stop();
-      if (audioContextRef.current) audioContextRef.current.close().catch(console.error);
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(console.error);
+        audioContextRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
