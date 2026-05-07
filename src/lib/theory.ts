@@ -120,6 +120,23 @@ export function detectKey(bassChroma: number[], midChroma: number[], highChroma:
   let top = candidates[0];
   const topIdx = NOTE_NAMES.indexOf(top.key);
   
+  // --- SUBDOMINANT VS TONIC RESOLUTION (The IV-V-I Fix) ---
+  // If the top candidate is 'G' Major, check if 'C' (Subdominant) is actually the Tonic.
+  // We check for the "Leading Tone Paradox": If the 7th is weak but the Flat 7th is strong,
+  // the candidate is likely the V chord of the real key.
+  if (top.mode === 'major') {
+    const seventhIdx = (topIdx + 11) % 12; // Leading Tone (e.g., F# in G)
+    const flatSeventhIdx = (topIdx + 10) % 12; // Flat 7th (e.g., F in G)
+    const fourthIdx = (topIdx + 5) % 12; // Subdominant (e.g., C in G)
+
+    if (nMid[flatSeventhIdx] > nMid[seventhIdx] * 1.5 && nMid[fourthIdx] > nMid[topIdx] * 0.8) {
+       const tonicCandidate = candidates.find(c => c.key === NOTE_NAMES[fourthIdx] && c.mode === 'major');
+       if (tonicCandidate && tonicCandidate.confidence > top.confidence * 0.85) {
+          return { key: tonicCandidate.key, mode: 'major', confidence: tonicCandidate.confidence };
+       }
+    }
+  }
+
   // Pivot Check (Major Bias / Relative Key)
   const topMajor = candidates.find(c => c.mode === 'major');
   if (topMajor && top.mode === 'minor' && topMajor.confidence > top.confidence * 0.95) {
