@@ -54,18 +54,29 @@ export default function App() {
             <div className="w-[380px] h-[380px] border border-dashed border-white/5 rounded-full opacity-30 animate-[spin_60s_linear_infinite]" />
             <div className="absolute w-[340px] h-[340px] rounded-full border-[1px] border-white/5 flex items-center justify-center">
               <div className="w-[280px] h-[280px] rounded-full border-[1px] border-indigo-500/20 flex items-center justify-center shadow-[0_0_100px_rgba(79,70,229,0.05)]">
-                <div className="w-[220px] h-[220px] rounded-full bg-gradient-to-b from-white/5 to-transparent border border-white/10 flex flex-col items-center justify-center relative">
+                <div className="w-[220px] h-[220px] rounded-full bg-gradient-to-b from-white/5 to-transparent border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
+                  {/* Progress Ring Overlay */}
+                  {analysis && !analysis.isStabilized && (
+                    <div className="absolute inset-0 z-0 opacity-20">
+                      <div 
+                        className="h-full bg-indigo-500 transition-all duration-300" 
+                        style={{ width: `${analysis.progress * 100}%` }}
+                      ></div>
+                    </div>
+                  )}
                   <AnimatePresence mode="wait">
                     {analysis ? (
                       <motion.div
                         key="result"
                         initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
+                        animate={{ opacity: analysis.isStabilized ? 1 : 0.6, scale: 1 }}
                         exit={{ opacity: 0, scale: 1.1 }}
-                        className="flex flex-col items-center justify-center"
+                        className="flex flex-col items-center justify-center z-10"
                       >
-                        <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-[0.3em] mb-1">Detected Key</span>
-                        <h2 className="text-8xl font-black tracking-tighter text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+                        <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-[0.3em] mb-1">
+                          {analysis.isStabilized ? 'Confirmed Key' : 'Analyzing...'}
+                        </span>
+                        <h2 className={`text-8xl font-black tracking-tighter text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] ${!analysis.isStabilized ? 'animate-pulse' : ''}`}>
                           {analysis.key}
                         </h2>
                         <span className="text-xl font-light text-gray-400 mt-[-2px] uppercase tracking-widest">
@@ -77,7 +88,7 @@ export default function App() {
                         key="idle"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 0.3 }}
-                        className="flex flex-col items-center gap-2 text-center px-6"
+                        className="flex flex-col items-center gap-2 text-center px-6 z-10"
                       >
                          <Activity className="w-6 h-6 text-neutral-500 mb-1" />
                          <span className="text-[9px] uppercase font-mono tracking-widest leading-relaxed">
@@ -167,11 +178,15 @@ export default function App() {
       {/* Status Bar */}
       <footer className="px-8 py-3 bg-black/40 border-t border-white/5 flex items-center justify-between text-[8px] text-gray-500 uppercase tracking-widest z-20">
         <div className="flex gap-6">
+          <div className="flex items-center gap-2">
+            <div className={`w-1 h-1 rounded-full ${analysis?.isStabilized ? 'bg-indigo-500' : 'bg-amber-500 animate-pulse'}`} />
+            <span>SENSORS: {analysis?.isStabilized ? 'STABILIZED' : (analysis ? 'CALIBRATING...' : 'IDLE')}</span>
+          </div>
           <span>Latency: 12ms</span>
           <span>Buffer: 2048</span>
         </div>
         <div className="flex gap-4">
-          <span className="text-white/20 uppercase font-bold tracking-tight">TuneDetect Engine v1.0</span>
+          <span className="text-white/20 uppercase font-bold tracking-tight">Spectral Stabilization v2.0</span>
         </div>
       </footer>
     </div>

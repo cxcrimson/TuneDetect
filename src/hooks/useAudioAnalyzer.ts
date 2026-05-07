@@ -8,6 +8,8 @@ export function useAudioAnalyzer(isActive: boolean) {
     mode: string;
     confidence: number;
     chroma: number[];
+    isStabilized: boolean;
+    progress: number; // 0 to 1
   } | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -15,9 +17,11 @@ export function useAudioAnalyzer(isActive: boolean) {
   const analyzerRef = useRef<any>(null);
 
   const globalChromaRef = useRef(new Array(12).fill(0));
+  const frameCountRef = useRef(0);
 
   const reset = () => {
     globalChromaRef.current = new Array(12).fill(0);
+    frameCountRef.current = 0;
     setAnalysis(null);
   };
 
@@ -34,7 +38,6 @@ export function useAudioAnalyzer(isActive: boolean) {
       try {
         let stream: MediaStream;
 
-        // Check if running as a Chrome/Edge extension and has tabCapture permission
         if (typeof chrome !== 'undefined' && chrome.tabCapture) {
           stream = await new Promise((resolve, reject) => {
             chrome.tabCapture.capture({ audio: true, video: false }, (s) => {
@@ -43,7 +46,6 @@ export function useAudioAnalyzer(isActive: boolean) {
             });
           });
         } else {
-          // Fallback to microphone for web preview
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
 
@@ -53,15 +55,16 @@ export function useAudioAnalyzer(isActive: boolean) {
 
         const source = audioContext.createMediaStreamSource(stream);
 
-        // CRITICAL for extensions: Pipe the captured audio back to the speakers
-        // Otherwise, the tab will go silent when captured.
         if (typeof chrome !== 'undefined' && chrome.tabCapture) {
           source.connect(audioContext.destination);
         }
 
-        // Live chroma for the visualizer (faster response)
         let liveChroma = new Array(12).fill(0);
-        let frames = 0;
+        
+        // Target: ~45 seconds of audio for full stabilization
+        // With 2048 buffer @ 48kHz, that's roughly 23 frames per second.
+        // 45 seconds * 23 fps = ~1000 frames.
+        const STABILIZATION_FRAMES = 1000;
 
         const analyzer = Meyda.createMeydaAnalyzer({
           audioContext: audioContext,
@@ -70,21 +73,30 @@ export function useAudioAnalyzer(isActive: boolean) {
           featureExtractors: ['chroma'],
           callback: (features: any) => {
             if (features.chroma) {
-              // Update live chroma (fast smoothing for UI feedback)
+              frameCountRef.current++;
+              
+              const isFirstMinute = frameCountRef.current < STABILIZATION_FRAMES;
+              const progress = Math.min(frameCountRef.current / STABILIZATION_FRAMES, 1);
+
               features.chroma.forEach((val: number, i: number) => {
                 liveChroma[i] = liveChroma[i] * 0.7 + val * 0.3;
-                // Update global chroma (VERY slow accumulation for "Overall Key")
-                // This builds a histogram of all notes heard so far
-                globalChromaRef.current[i] = globalChromaRef.current[i] * 0.999 + val * 0.001;
+                
+                if (isFirstMinute) {
+                  // Pure accumulation for building the initial histogram
+                  globalChromaRef.current[i] += val;
+                } else {
+                  // Transition to leaky integrator for long-term drift tracking
+                  globalChromaRef.current[i] = globalChromaRef.current[i] * 0.999 + val * 0.001;
+                }
               });
 
-              frames++;
-              // Analyze using Global Chroma for stability
-              if (frames % 15 === 0) {
+              if (frameCountRef.current % 15 === 0) {
                 const result = detectKey(globalChromaRef.current);
                 setAnalysis({
                   ...result,
-                  chroma: [...liveChroma] 
+                  chroma: [...liveChroma],
+                  isStabilized: !isFirstMinute,
+                  progress
                 });
               }
             }
